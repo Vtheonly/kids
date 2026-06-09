@@ -156,9 +156,44 @@ export class ShapesComponent {
       return;
     }
 
+    const TARGETS = {
+      circleLeft: '#2B803E',
+      circleRight: '#0A5EA5',
+      triangleLeft: '#0A5EA5',
+      triangleRight: '#FBC507',
+      pentagonLeft: '#FFFFFF',
+      pentagonRight: '#1A1A1D',
+      ovalTop: '#2B803E',
+      ovalBottom: '#FBC507',
+      rectangleLeft: '#D21B1B',
+      rectangleRight: '#FFFFFF'
+    };
+
+    const targetColor = TARGETS[segmentKey];
+    if (!targetColor || selectedColor.toUpperCase() !== targetColor.toUpperCase()) {
+      audioEngine.playIncorrect();
+      const targetEl = segmentEl.closest('.paint-canvas-target') || segmentEl;
+      this.shakeElement(targetEl);
+      
+      const arMsg = "هذا اللون غير مطابق للمثال السابق لهذا الجزء!";
+      const enMsg = "This color does not match the example for this part!";
+      this.updateAssistantText(arMsg, enMsg);
+      audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
+      return;
+    }
+
     segmentEl.style.fill = selectedColor;
     gameState.colorSplitShapeSegment(segmentKey, selectedColor);
     audioEngine.playSuccess();
+
+    // Praise
+    const praises = [
+      { text: "Correct match!", ar: "مطابقة صحيحة!" },
+      { text: "Well done!", ar: "عمل رائع!" }
+    ];
+    const praise = praises[Math.floor(Math.random() * praises.length)];
+    this.updateAssistantText(praise.ar, praise.text);
+    audioEngine.speak(praise.ar, 'ar', null, () => audioEngine.speak(praise.text, 'en'));
 
     this.checkCompletion();
   }
@@ -170,6 +205,18 @@ export class ShapesComponent {
       return;
     }
 
+    // Correct color for the sequence question cell (index 3) is Yellow (#FBC507)
+    if (selectedColor.toUpperCase() !== '#FBC507') {
+      audioEngine.playIncorrect();
+      this.shakeElement(cellEl);
+
+      const arMsg = "حاول مرة أخرى! انظر إلى ترتيب الألوان في النمط.";
+      const enMsg = "Try again! Look at the order of colors in the pattern.";
+      this.updateAssistantText(arMsg, enMsg);
+      audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
+      return;
+    }
+
     cellEl.style.backgroundColor = selectedColor;
     cellEl.textContent = '';
     cellEl.classList.remove('question-mark');
@@ -177,7 +224,20 @@ export class ShapesComponent {
     gameState.setSequenceAnswer(index, selectedColor);
     audioEngine.playSuccess();
 
+    // Praise
+    this.updateAssistantText("رائع! لقد أكملت النمط بنجاح.", "Fantastic! You completed the pattern successfully.");
+    audioEngine.speak("رائع! لقد أكملت النمط بنجاح.", 'ar', null, () => audioEngine.speak("Fantastic! You completed the pattern successfully.", 'en'));
+
     this.checkCompletion();
+  }
+
+  shakeElement(el) {
+    el.classList.add('shake');
+    const onEnd = () => {
+      el.classList.remove('shake');
+      el.removeEventListener('animationend', onEnd);
+    };
+    el.addEventListener('animationend', onEnd);
   }
 
   warnSelectColor() {

@@ -106,6 +106,19 @@ export class ColorsComponent {
       return;
     }
 
+    const correctColor = rowsData[index].hex;
+    if (selectedColor.toUpperCase() !== correctColor.toUpperCase()) {
+      audioEngine.playIncorrect();
+      this.shakeElement(element);
+      const rowNameAr = rowsData[index].ar;
+      const rowNameEn = rowsData[index].en;
+      const arMsg = `هذا ليس اللون الصحيح! ابحث عن لون الصف ${rowNameAr} في اللوحة.`;
+      const enMsg = `Incorrect color! Look for the color of the ${rowNameEn} row on the board.`;
+      this.updateAssistantText(arMsg, enMsg);
+      audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
+      return;
+    }
+
     element.style.backgroundColor = selectedColor;
     const indicator = element.querySelector('.strip-color-indicator');
     if (indicator) {
@@ -114,6 +127,15 @@ export class ColorsComponent {
 
     gameState.colorStrip(index, selectedColor);
     audioEngine.playSuccess();
+
+    // Praise
+    const praises = [
+      { text: "Correct strip color!", ar: "لون شريط صحيح!" },
+      { text: "Well done!", ar: "أحسنت!" }
+    ];
+    const praise = praises[Math.floor(Math.random() * praises.length)];
+    this.updateAssistantText(praise.ar, praise.text);
+    audioEngine.speak(praise.ar, 'ar', null, () => audioEngine.speak(praise.text, 'en'));
 
     this.checkCompletion();
   }
@@ -125,11 +147,49 @@ export class ColorsComponent {
       return;
     }
 
+    const VALID_SHAPE_COLORS = {
+      square: ['#0A5EA5', '#D21B1B', '#FFFFFF'],
+      triangle: ['#2B803E', '#D21B1B', '#FFFFFF'],
+      circle: ['#2B803E', '#D21B1B']
+    };
+
+    const validColors = VALID_SHAPE_COLORS[shapeKey] || [];
+    const isValid = validColors.some(c => c.toUpperCase() === selectedColor.toUpperCase());
+
+    if (!isValid) {
+      audioEngine.playIncorrect();
+      const targetEl = segmentEl.closest('.paint-canvas-target') || segmentEl;
+      this.shakeElement(targetEl);
+      
+      const arMsg = "هذا الشكل لا يحمل هذا اللون في اللوحة التفاعلية!";
+      const enMsg = "This shape does not have this color on the interactive board!";
+      this.updateAssistantText(arMsg, enMsg);
+      audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
+      return;
+    }
+
     segmentEl.style.fill = selectedColor;
     gameState.colorShape(shapeKey, selectedColor);
     audioEngine.playSuccess();
 
+    const praises = [
+      { text: "Excellent match!", ar: "مطابقة ممتازة!" },
+      { text: "That is correct!", ar: "هذا صحيح!" }
+    ];
+    const praise = praises[Math.floor(Math.random() * praises.length)];
+    this.updateAssistantText(praise.ar, praise.text);
+    audioEngine.speak(praise.ar, 'ar', null, () => audioEngine.speak(praise.text, 'en'));
+
     this.checkCompletion();
+  }
+
+  shakeElement(el) {
+    el.classList.add('shake');
+    const onEnd = () => {
+      el.classList.remove('shake');
+      el.removeEventListener('animationend', onEnd);
+    };
+    el.addEventListener('animationend', onEnd);
   }
 
   warnSelectColor() {
