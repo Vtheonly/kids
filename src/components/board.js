@@ -179,34 +179,57 @@ export class BoardComponent {
     this.activeDragElement = null;
     this.pointerId = null;
 
-    // Detect collision with slots
-    const pointerReleaseX = e.clientX;
-    const pointerReleaseY = e.clientY;
+    // Detect collision with slots using hit-test (pointer inside padded rect)
+    const px = e.clientX;
+    const py = e.clientY;
+    const padding = 30; // extra pixels around each slot for easier targeting
 
     const slots = this.container.querySelectorAll('.slot');
+    let hitSlot = null;
     let closestSlot = null;
     let minDistance = Infinity;
 
     slots.forEach(slot => {
-      if (gameState.boardFilledSlots[slot.id]) return; // slot already filled
+      if (gameState.boardFilledSlots[slot.id]) return;
       
       const rect = slot.getBoundingClientRect();
-      const slotCenter = {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2
-      };
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dist = Math.hypot(px - cx, py - cy);
 
-      const dist = Math.hypot(pointerReleaseX - slotCenter.x, pointerReleaseY - slotCenter.y);
+      // Check if pointer is inside the padded slot rect
+      if (px >= rect.left - padding && px <= rect.right + padding &&
+          py >= rect.top - padding && py <= rect.bottom + padding) {
+        if (!hitSlot || dist < Math.hypot(px - hitSlot.getBoundingClientRect().left - hitSlot.getBoundingClientRect().width / 2, py - hitSlot.getBoundingClientRect().top - hitSlot.getBoundingClientRect().height / 2)) {
+          hitSlot = slot;
+        }
+      }
+
+      // Also track absolute closest as fallback
       if (dist < minDistance) {
         minDistance = dist;
         closestSlot = slot;
       }
     });
 
-    const snapDistanceThreshold = 80; // pixels
+    // In challenge mode, also check if pointer is near the challenge target slot specifically
+    if (gameState.mode === 'challenge' && gameState.currentChallenge) {
+      const targetSlot = this.container.querySelector(`#${gameState.currentChallenge.slotElementId}`);
+      if (targetSlot && !gameState.boardFilledSlots[targetSlot.id]) {
+        const tRect = targetSlot.getBoundingClientRect();
+        const largePadding = 50; // even more generous for the target
+        if (px >= tRect.left - largePadding && px <= tRect.right + largePadding &&
+            py >= tRect.top - largePadding && py <= tRect.bottom + largePadding) {
+          hitSlot = targetSlot;
+        }
+      }
+    }
 
-    if (closestSlot && minDistance < snapDistanceThreshold) {
-      this.handleSlotPlacement(stencil, closestSlot);
+    const matchedSlot = hitSlot || closestSlot;
+    const snapDistanceThreshold = 120; // generous threshold
+
+    if (matchedSlot && minDistance < snapDistanceThreshold) {
+      this.handleSlotPlacement(stencil, matchedSlot);
     } else {
       this.slideBack(stencil);
     }
@@ -238,11 +261,9 @@ export class BoardComponent {
         this.slideBack(stencil);
         
         if (stencilShape === challenge.shape) {
-          // Correct shape, placed in wrong lane
           audioEngine.playCloseTry();
           this.triggerVocalPrompt('close');
         } else {
-          // Completely incorrect shape
           audioEngine.playIncorrect();
           this.triggerVocalPrompt('incorrect');
         }
@@ -266,6 +287,29 @@ export class BoardComponent {
 
   snapToSlot(stencil, slot) {
     stencil.classList.add('locked-to-board');
+    
+    // Get the row color for this slot
+    const rowColor = slot.dataset.color;
+    const rowData = rowsData.find(r => r.color === rowColor);
+    const fillHex = rowData ? rowData.hex : '#888888';
+
+    // Hide the dark slot SVG outline
+    const slotSvg = slot.querySelector('.slot-svg');
+    if (slotSvg) {
+      slotSvg.style.display = 'none';
+    }
+
+    // Hide the lift-tab notch pseudo-element by adding a class
+    slot.classList.add('slot-filled');
+
+    // Replace the stencil's grey plate with a solid colored shape
+    const shapePath = SHAPE_GEOMETRIES[slot.dataset.shape];
+    stencil.innerHTML = `
+      <svg class="stencil-svg-plate" viewBox="0 0 100 100">
+        <path d="${shapePath}" fill="${fillHex}" stroke="rgba(0,0,0,0.3)" stroke-width="2.5"/>
+      </svg>
+    `;
+
     slot.appendChild(stencil);
     
     // Reset transform & center stencil perfectly inside the slot
@@ -281,11 +325,11 @@ export class BoardComponent {
       { transform: 'scale(1.15)' },
       { transform: 'scale(1)' }
     ], {
-      duration: 150,
-      easing: 'ease-out'
+      duration: 250,
+      easing: 'cubic-bezier(0.175, 0.885, 0.32, 1.275)'
     });
 
-    logger.success('Board', `Stencil snapped into slot: ${slot.id}`);
+    logger.success('Board', `Stencil snapped into slot: ${slot.id} with color ${fillHex}`);
   }
 
   slideBack(stencil) {

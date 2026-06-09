@@ -472,7 +472,8 @@ body {
   z-index: 10;
   border-radius: 8px;
   box-shadow: 0 6px 12px rgba(0,0,0,0.22), inset 0 2px 2px rgba(255,255,255,0.4);
-  background: transparent;
+  background: var(--wood-tile);
+  border: 1px solid var(--wood-tile-border);
 }
 
 .stencil-tile:active {
@@ -508,6 +509,12 @@ body {
   transform: none !important;
   box-shadow: none;
   z-index: 1;
+  background: transparent;
+  border: none;
+}
+
+.slot-filled::after {
+  display: none !important;
 }
 
 .locked-to-board {
