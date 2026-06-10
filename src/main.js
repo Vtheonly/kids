@@ -9,6 +9,7 @@ class AppManager {
   constructor() {
     this.ui = null;
     this.activeComponent = null;
+    this.currentTab = null; // Track the active tab to prevent redundant component reboots
 
     // Confetti Celebration Canvas
     this.canvas = null;
@@ -26,8 +27,12 @@ class AppManager {
     // Setup Confetti
     this.initConfetti();
 
-    // Bind state changes to manage component lifecycle
-    gameState.subscribe((state) => this.handleTabTransition(state.activeTab));
+    // Bind state changes, only transitioning if the tab has actually changed
+    gameState.subscribe((state) => {
+      if (this.currentTab !== state.activeTab) {
+        this.handleTabTransition(state.activeTab);
+      }
+    });
 
     // Handle global resets
     window.addEventListener('game-reset', () => {
@@ -45,6 +50,8 @@ class AppManager {
       this.activeComponent.unmount();
       this.activeComponent = null;
     }
+
+    this.currentTab = tabName;
 
     // Mount new component
     if (tabName === 'board') {

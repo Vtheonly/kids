@@ -1,6 +1,7 @@
 import { logger } from '../core/logger.js';
 import { audioEngine } from '../core/audio.js';
 import { gameState, rowsData, translations, SHAPES_MAP } from '../core/state.js';
+import { BoardDragEngine } from './board-drag.js';
 
 export const SHAPE_GEOMETRIES = {
   [SHAPES_MAP.CIRCLE]: 'M 50,20 A 30,30 0 1,0 50,80 A 30,30 0 1,0 50,20 Z',
@@ -17,12 +18,9 @@ export class BoardComponent {
   constructor(containerEl, trayEl) {
     this.container = containerEl;
     this.tray = trayEl;
-    this.activeDragElement = null;
-    this.dragStartPos = { x: 0, y: 0 };
-    this.dragOffset = { x: 0, y: 0 };
-    this.pointerId = null;
-
-    // Track unsubscribe functions
+    
+    // Instantiate specialized drag module
+    this.dragEngine = new BoardDragEngine(this);
     this.unsubscribeState = null;
   }
 
@@ -31,13 +29,11 @@ export class BoardComponent {
     this.renderSlots();
     this.spawnStencils();
 
-    // Listen to game state updates
     this.unsubscribeState = gameState.subscribe((state) => {
       if (state.activeTab !== 'board') return;
       this.updateChallengeUI();
     });
 
-    // Initial challenge trigger if challenge mode is active
     if (gameState.mode === 'challenge') {
       this.triggerNextChallenge();
     } else {
@@ -55,10 +51,10 @@ export class BoardComponent {
     if (this.unsubscribeState) {
       this.unsubscribeState();
     }
+    this.dragEngine.cancelActiveDrag();
   }
 
   renderSlots() {
-    // Clear slots first
     rowsData.forEach(rowData => {
       const rowEl = this.container.querySelector(`.row-${rowData.color}`);
       if (!rowEl) return;
@@ -89,7 +85,6 @@ export class BoardComponent {
   spawnStencils() {
     this.tray.innerHTML = '';
     
-    // Generate pool of stencils matching board configuration
     const stencilPool = [];
     rowsData.forEach(rowData => {
       rowData.shapes.forEach((shape, colIdx) => {
@@ -100,10 +95,8 @@ export class BoardComponent {
       });
     });
 
-    // Shuffle stencils to make it challenging
     stencilPool.sort(() => Math.random() - 0.5);
 
-    // Render stencils in the tray
     stencilPool.forEach((stencilData) => {
       const stencilEl = document.createElement('div');
       stencilEl.className = 'stencil-tile';
@@ -111,7 +104,6 @@ export class BoardComponent {
       stencilEl.dataset.shape = stencilData.shape;
       
       const geom = SHAPE_GEOMETRIES[stencilData.shape];
-      // EvenOdd compound path to create hollow cutout
       const compoundPath = `M 0,0 H 100 V 100 H 0 Z ${geom}`;
 
       stencilEl.innerHTML = `
@@ -120,73 +112,26 @@ export class BoardComponent {
         </svg>
       `;
 
-      this.bindDragEvents(stencilEl);
+      // Pass control of interaction setup to the drag module
+      this.dragEngine.init(stencilEl);
       this.tray.appendChild(stencilEl);
     });
 
     logger.debug('Board', 'Stencils spawned and shuffled in tray.');
   }
 
-  bindDragEvents(element) {
-    element.addEventListener('pointerdown', (e) => this.onPointerDown(e, element));
-    element.addEventListener('pointermove', (e) => this.onPointerMove(e));
-    element.addEventListener('pointerup', (e) => this.onPointerUp(e));
-    element.addEventListener('pointercancel', (e) => this.onPointerUp(e));
+  onDragStart() {
+    // Optional placeholder hook for start of drag visual feedback
   }
 
-  onPointerDown(e, element) {
-    if (element.classList.contains('locked-to-board')) return;
-    e.preventDefault();
-
-    this.activeDragElement = element;
-    this.pointerId = e.pointerId;
-    element.setPointerCapture(this.pointerId);
-
-    // Audio click feedback
-    audioEngine.playGrab();
-
-    // Track layout coordinates
-    const rect = element.getBoundingClientRect();
-    this.dragStartPos = {
-      x: rect.left,
-      y: rect.top
-    };
-    this.dragOffset = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
-
-    element.classList.add('dragging');
-    logger.debug('Board', `Grabbed stencil: ${element.id} (${element.dataset.shape})`);
-  }
-
-  onPointerMove(e) {
-    if (!this.activeDragElement || e.pointerId !== this.pointerId) return;
-
-    const dx = e.clientX - this.dragStartPos.x - this.dragOffset.x;
-    const dy = e.clientY - this.dragStartPos.y - this.dragOffset.y;
-
-    this.activeDragElement.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.1)`;
-  }
-
-  onPointerUp(e) {
-    if (!this.activeDragElement || e.pointerId !== this.pointerId) return;
-
-    const stencil = this.activeDragElement;
-    stencil.releasePointerCapture(this.pointerId);
-    stencil.classList.remove('dragging');
-    
-    this.activeDragElement = null;
-    this.pointerId = null;
-
-    // Detect collision with slots using hit-test (pointer inside padded rect)
-    const px = e.clientX;
-    const py = e.clientY;
-    const padding = 30; // extra pixels around each slot for easier targeting
+  onDragEnd(stencil, dropX, dropY) {
+    // Get the visual bounding center of the transformed stencil
+    const stencilRect = stencil.getBoundingClientRect();
+    const scx = stencilRect.left + stencilRect.width / 2;
+    const scy = stencilRect.top + stencilRect.height / 2;
 
     const slots = this.container.querySelectorAll('.slot');
-    let hitSlot = null;
-    let closestSlot = null;
+    let matchedSlot = null;
     let minDistance = Infinity;
 
     slots.forEach(slot => {
@@ -195,38 +140,20 @@ export class BoardComponent {
       const rect = slot.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
-      const dist = Math.hypot(px - cx, py - cy);
 
-      // Check if pointer is inside the padded slot rect
-      if (px >= rect.left - padding && px <= rect.right + padding &&
-          py >= rect.top - padding && py <= rect.bottom + padding) {
-        if (!hitSlot || dist < Math.hypot(px - hitSlot.getBoundingClientRect().left - hitSlot.getBoundingClientRect().width / 2, py - hitSlot.getBoundingClientRect().top - hitSlot.getBoundingClientRect().height / 2)) {
-          hitSlot = slot;
-        }
-      }
+      // Distance checking against the stencil's visual center and the pointer's release coordinates
+      const distToStencil = Math.hypot(scx - cx, scy - cy);
+      const distToPointer = Math.hypot(dropX - cx, dropY - cy);
+      
+      const dist = Math.min(distToStencil, distToPointer);
 
-      // Also track absolute closest as fallback
       if (dist < minDistance) {
         minDistance = dist;
-        closestSlot = slot;
+        matchedSlot = slot;
       }
     });
 
-    // In challenge mode, also check if pointer is near the challenge target slot specifically
-    if (gameState.mode === 'challenge' && gameState.currentChallenge) {
-      const targetSlot = this.container.querySelector(`#${gameState.currentChallenge.slotElementId}`);
-      if (targetSlot && !gameState.boardFilledSlots[targetSlot.id]) {
-        const tRect = targetSlot.getBoundingClientRect();
-        const largePadding = 50; // even more generous for the target
-        if (px >= tRect.left - largePadding && px <= tRect.right + largePadding &&
-            py >= tRect.top - largePadding && py <= tRect.bottom + largePadding) {
-          hitSlot = targetSlot;
-        }
-      }
-    }
-
-    const matchedSlot = hitSlot || closestSlot;
-    const snapDistanceThreshold = 120; // generous threshold
+    const snapDistanceThreshold = 140; // Increased drop sensitivity
 
     if (matchedSlot && minDistance < snapDistanceThreshold) {
       this.handleSlotPlacement(stencil, matchedSlot);
@@ -249,15 +176,12 @@ export class BoardComponent {
         stencilShape === challenge.shape &&
         slot.id === challenge.slotElementId
       ) {
-        // Correct snap!
         this.snapToSlot(stencil, slot);
         audioEngine.playSuccess();
         this.triggerVocalPraise();
         
-        // Wait and generate next challenge
         setTimeout(() => this.triggerNextChallenge(), 1500);
       } else {
-        // Incorrect placement in challenge mode
         this.slideBack(stencil);
         
         if (stencilShape === challenge.shape) {
@@ -269,7 +193,6 @@ export class BoardComponent {
         }
       }
     } else {
-      // Free play mode: snap if shapes match
       if (stencilShape === slotShape) {
         this.snapToSlot(stencil, slot);
         audioEngine.playSuccess();
@@ -288,21 +211,17 @@ export class BoardComponent {
   snapToSlot(stencil, slot) {
     stencil.classList.add('locked-to-board');
     
-    // Get the row color for this slot
     const rowColor = slot.dataset.color;
     const rowData = rowsData.find(r => r.color === rowColor);
     const fillHex = rowData ? rowData.hex : '#888888';
 
-    // Hide the dark slot SVG outline
     const slotSvg = slot.querySelector('.slot-svg');
     if (slotSvg) {
       slotSvg.style.display = 'none';
     }
 
-    // Hide the lift-tab notch pseudo-element by adding a class
     slot.classList.add('slot-filled');
 
-    // Replace the stencil's grey plate with a solid colored shape
     const shapePath = SHAPE_GEOMETRIES[slot.dataset.shape];
     stencil.innerHTML = `
       <svg class="stencil-svg-plate" viewBox="0 0 100 100">
@@ -312,15 +231,12 @@ export class BoardComponent {
 
     slot.appendChild(stencil);
     
-    // Reset transform & center stencil perfectly inside the slot
     stencil.style.transform = '';
     stencil.style.left = '0';
     stencil.style.top = '0';
 
-    // Update global state
     gameState.fillBoardSlot(slot.id, stencil.id);
 
-    // Micro-animation bounce on snap
     stencil.animate([
       { transform: 'scale(1.15)' },
       { transform: 'scale(1)' }
@@ -355,7 +271,6 @@ export class BoardComponent {
       return;
     }
 
-    // Pick a random empty slot for the challenge
     const selectedSlot = emptySlots[Math.floor(Math.random() * emptySlots.length)];
     const targetShape = selectedSlot.dataset.shape;
     const targetColor = selectedSlot.dataset.color;
@@ -369,14 +284,12 @@ export class BoardComponent {
       slotElementId: selectedSlot.id
     };
 
-    // Update highlights
     allSlots.forEach(s => s.classList.remove('highlight-target'));
     selectedSlot.classList.add('highlight-target');
 
     const arPrompt = `ضع ${shapeDetails.ar} في الصف ${rowDetails.ar}!`;
     const enPrompt = `Place the ${shapeDetails.en} on the ${rowDetails.en} row!`;
 
-    // Prompt through assistant bubble
     this.updateAssistantText(arPrompt, enPrompt);
     audioEngine.speak(arPrompt, 'ar', null, () => audioEngine.speak(enPrompt, 'en'));
 
@@ -401,7 +314,6 @@ export class BoardComponent {
     if (arEl) arEl.textContent = arText;
     if (enEl) enEl.textContent = enText;
 
-    // Trigger visual audio wave animation
     const waves = document.querySelectorAll('.audio-wave');
     waves.forEach(w => w.classList.add('animating'));
     setTimeout(() => {
