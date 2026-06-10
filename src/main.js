@@ -9,7 +9,7 @@ class AppManager {
   constructor() {
     this.ui = null;
     this.activeComponent = null;
-    this.currentTab = null; // Track the active tab to prevent redundant component reboots
+    this.currentTab = null;
 
     // Confetti Celebration Canvas
     this.canvas = null;
@@ -20,32 +20,26 @@ class AppManager {
   init() {
     logger.info('App', 'Bootstrapping Unikey Kids Educational Suite...');
 
-    // Instantiate UI
     this.ui = new UIComponent();
     this.ui.init();
 
-    // Setup Confetti
     this.initConfetti();
 
-    // Bind state changes, only transitioning if the tab has actually changed
     gameState.subscribe((state) => {
       if (this.currentTab !== state.activeTab) {
         this.handleTabTransition(state.activeTab);
       }
     });
 
-    // Handle global resets
     window.addEventListener('game-reset', () => {
       gameState.reset();
       this.rebootActiveComponent();
     });
 
-    // Mount initial component
     this.handleTabTransition(gameState.activeTab);
   }
 
   handleTabTransition(tabName) {
-    // Unmount current active component
     if (this.activeComponent) {
       this.activeComponent.unmount();
       this.activeComponent = null;
@@ -53,7 +47,6 @@ class AppManager {
 
     this.currentTab = tabName;
 
-    // Mount new component
     if (tabName === 'board') {
       const container = document.getElementById('rows-wrapper');
       const tray = document.getElementById('stencils-tray');
@@ -91,14 +84,18 @@ class AppManager {
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // Listen to custom confetti bursts
-    window.addEventListener('celebration-burst', () => this.triggerConfettiBurst());
+    // Listen to custom confetti bursts with custom position coordinates
+    window.addEventListener('celebration-burst', (e) => {
+      const x = (e.detail && e.detail.x !== undefined) ? e.detail.x : this.canvas.width / 2;
+      const y = (e.detail && e.detail.y !== undefined) ? e.detail.y : this.canvas.height / 2;
+      const isMini = !!(e.detail && e.detail.mini);
+      this.triggerConfettiBurst(x, y, isMini);
+    });
 
-    // Start particles animation loop
     this.animateParticles();
   }
 
-  triggerConfettiBurst() {
+  triggerConfettiBurst(x, y, isMini = false) {
     if (!this.canvas) return;
     
     const colors = [
@@ -108,20 +105,19 @@ class AppManager {
       '#ffc107', '#ff9800', '#ff5722'
     ];
 
-    const particleCount = 45;
+    const particleCount = isMini ? 18 : 45;
     for (let i = 0; i < particleCount; i++) {
       this.particles.push({
-        x: this.canvas.width / 2 + (Math.random() - 0.5) * 250,
-        y: this.canvas.height / 2 + (Math.random() - 0.5) * 150,
-        vx: (Math.random() - 0.5) * 12,
-        vy: (Math.random() - 2) * 6 - 2, // upwards initial velocity
+        x: x + (Math.random() - 0.5) * 40,
+        y: y + (Math.random() - 0.5) * 40,
+        vx: (Math.random() - 0.5) * (isMini ? 8 : 12),
+        vy: (Math.random() - 2) * (isMini ? 4 : 6) - 1, // Upwards trajectory physics
         color: colors[Math.floor(Math.random() * colors.length)],
-        size: Math.random() * 8 + 6,
+        size: Math.random() * (isMini ? 5 : 8) + 4,
         rotation: Math.random() * 360,
-        rotationSpeed: (Math.random() - 0.5) * 8
+        rotationSpeed: (Math.random() - 0.5) * 12
       });
     }
-    logger.debug('App', `Triggered confetti burst of ${particleCount} particles.`);
   }
 
   animateParticles() {
@@ -133,7 +129,7 @@ class AppManager {
       const p = this.particles[i];
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.22; // gravity
+      p.vy += 0.22; // Gravity simulation pull
       p.rotation += p.rotationSpeed;
 
       this.ctx.save();
@@ -141,11 +137,9 @@ class AppManager {
       this.ctx.rotate((p.rotation * Math.PI) / 180);
       this.ctx.fillStyle = p.color;
       
-      // Draw rectangular confetti piece
       this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
       this.ctx.restore();
 
-      // Remove offscreen particles
       if (p.y > this.canvas.height || p.x < 0 || p.x > this.canvas.width) {
         this.particles.splice(i, 1);
       }
@@ -155,21 +149,20 @@ class AppManager {
   }
 }
 
-// Bootstrap once window DOM content is ready
 window.addEventListener('DOMContentLoaded', () => {
   const app = new AppManager();
   app.init();
   
-  // Attach app event helpers to segments
-  window.paintColorsShape = (key, segmentEl) => {
+  // Expose event handler helper to inline attributes with event objects
+  window.paintColorsShape = (key, segmentEl, event) => {
     if (app.activeComponent instanceof ColorsComponent) {
-      app.activeComponent.paintShape(key, segmentEl);
+      app.activeComponent.paintShape(key, segmentEl, event);
     }
   };
 
-  window.paintShapesSegment = (key, segmentEl) => {
+  window.paintShapesSegment = (key, segmentEl, event) => {
     if (app.activeComponent instanceof ShapesComponent) {
-      app.activeComponent.paintSegment(key, segmentEl);
+      app.activeComponent.paintSegment(key, segmentEl, event);
     }
   };
 });

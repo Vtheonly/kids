@@ -30,7 +30,7 @@
     <button class="tab-btn" data-tab="shapes">📐 دفتر الأشكال</button>
   </nav>
 
-  <!-- Interactive Board Options (Only visible on Board Tab) -->
+  <!-- Interactive Board Options -->
   <section class="mode-bar" id="mode-selector-wrapper">
     <div style="font-family: 'Tajawal', sans-serif; font-weight: 800; color: #495057; font-size: 0.95rem;">
       تحدي اللوحة / Board Mode
@@ -102,7 +102,7 @@
       </div>
     </div>
 
-    <!-- PANEL 2: COLORS WORKSHEET (Flash Memory Challenge Setup) -->
+    <!-- PANEL 2: COLORS WORKSHEET -->
     <div class="worksheet-panel" id="panel-colors">
       <div class="painting-studio-card">
         <div class="worksheet-branding-bar">
@@ -148,7 +148,7 @@
           <div class="paint-canvas-target">
             <div class="paint-svg-wrapper">
               <svg viewBox="0 0 100 100" style="width:100%; height:100%;">
-                <circle cx="50" cy="50" r="42" class="paintable-segment" id="color-shape-circle" onclick="paintColorsShape('circle', this)"/>
+                <circle cx="50" cy="50" r="42" class="paintable-segment" id="color-shape-circle" onclick="paintColorsShape('circle', this, event)"/>
               </svg>
             </div>
             <span class="canvas-title">دائرة (Circle)</span>
@@ -158,7 +158,7 @@
           <div class="paint-canvas-target">
             <div class="paint-svg-wrapper">
               <svg viewBox="0 0 100 100" style="width:100%; height:100%;">
-                <polygon points="50,10 10,90 90,90" class="paintable-segment" id="color-shape-triangle" onclick="paintColorsShape('triangle', this)"/>
+                <polygon points="50,10 10,90 90,90" class="paintable-segment" id="color-shape-triangle" onclick="paintColorsShape('triangle', this, event)"/>
               </svg>
             </div>
             <span class="canvas-title">مثلث (Triangle)</span>
@@ -168,7 +168,7 @@
           <div class="paint-canvas-target">
             <div class="paint-svg-wrapper">
               <svg viewBox="0 0 100 100" style="width:100%; height:100%;">
-                <rect x="10" y="10" width="80" height="80" rx="8" class="paintable-segment" id="color-shape-square" onclick="paintColorsShape('square', this)"/>
+                <rect x="10" y="10" width="80" height="80" rx="8" class="paintable-segment" id="color-shape-square" onclick="paintColorsShape('square', this, event)"/>
               </svg>
             </div>
             <span class="canvas-title">مربع (Square)</span>
@@ -226,8 +226,8 @@
           <div class="paint-canvas-target">
             <div class="paint-svg-wrapper">
               <svg viewBox="0 0 100 100" style="width:100%; height:100%;">
-                <rect x="10" y="25" width="40" height="50" class="paintable-segment" data-segment-key="rectangleLeft" onclick="paintShapesSegment('rectangleLeft', this)"/>
-                <rect x="50" y="25" width="40" height="50" class="paintable-segment" data-segment-key="rectangleRight" onclick="paintShapesSegment('rectangleRight', this)"/>
+                <rect x="10" y="25" width="40" height="50" class="paintable-segment" data-segment-key="rectangleLeft" onclick="paintShapesSegment('rectangleLeft', this, event)"/>
+                <rect x="50" y="25" width="40" height="50" class="paintable-segment" data-segment-key="rectangleRight" onclick="paintShapesSegment('rectangleRight', this, event)"/>
               </svg>
             </div>
             <span class="canvas-title">مستطيل (Rectangle)</span>
@@ -237,8 +237,8 @@
           <div class="paint-canvas-target">
             <div class="paint-svg-wrapper">
               <svg viewBox="0 0 100 100" style="width:100%; height:100%;">
-                <path d="M 50,10 A 40,40 0 0,0 50,90 Z" class="paintable-segment" data-segment-key="circleLeft" onclick="paintShapesSegment('circleLeft', this)"/>
-                <path d="M 50,10 A 40,40 0 0,1 50,90 Z" class="paintable-segment" data-segment-key="circleRight" onclick="paintShapesSegment('circleRight', this)"/>
+                <path d="M 50,10 A 40,40 0 0,0 50,90 Z" class="paintable-segment" data-segment-key="circleLeft" onclick="paintShapesSegment('circleLeft', this, event)"/>
+                <path d="M 50,10 A 40,40 0 0,1 50,90 Z" class="paintable-segment" data-segment-key="circleRight" onclick="paintShapesSegment('circleRight', this, event)"/>
               </svg>
             </div>
             <span class="canvas-title">دائرة (Circle)</span>
@@ -248,8 +248,8 @@
           <div class="paint-canvas-target">
             <div class="paint-svg-wrapper">
               <svg viewBox="0 0 100 100" style="width:100%; height:100%;">
-                <path d="M 10,50 C 10,32 28,18 50,18 C 72,18 90,32 90,50 Z" class="paintable-segment" data-segment-key="ovalTop" onclick="paintShapesSegment('ovalTop', this)"/>
-                <path d="M 10,50 C 10,68 28,82 50,82 C 72,82 90,68 90,50 Z" class="paintable-segment" data-segment-key="ovalBottom" onclick="paintShapesSegment('ovalBottom', this)"/>
+                <path d="M 10,50 C 10,32 28,18 50,18 C 72,18 90,32 90,50 Z" class="paintable-segment" data-segment-key="ovalTop" onclick="paintShapesSegment('ovalTop', this, event)"/>
+                <path d="M 10,50 C 10,68 28,82 50,82 C 72,82 90,68 90,50 Z" class="paintable-segment" data-segment-key="ovalBottom" onclick="paintShapesSegment('ovalBottom', this, event)"/>
               </svg>
             </div>
             <span class="canvas-title">بيضاوي (Oval)</span>
@@ -259,8 +259,8 @@
           <div class="paint-canvas-target">
             <div class="paint-svg-wrapper">
               <svg viewBox="0 0 100 100" style="width:100%; height:100%;">
-                <polygon points="50,12 14,88 50,88" class="paintable-segment" data-segment-key="triangleLeft" onclick="paintShapesSegment('triangleLeft', this)"/>
-                <polygon points="50,12 50,88 86,88" class="paintable-segment" data-segment-key="triangleRight" onclick="paintShapesSegment('triangleRight', this)"/>
+                <polygon points="50,12 14,88 50,88" class="paintable-segment" data-segment-key="triangleLeft" onclick="paintShapesSegment('triangleLeft', this, event)"/>
+                <polygon points="50,12 50,88 86,88" class="paintable-segment" data-segment-key="triangleRight" onclick="paintShapesSegment('triangleRight', this, event)"/>
               </svg>
             </div>
             <span class="canvas-title">مثلث (Triangle)</span>
@@ -270,8 +270,8 @@
           <div class="paint-canvas-target">
             <div class="paint-svg-wrapper">
               <svg viewBox="0 0 100 100" style="width:100%; height:100%;">
-                <polygon points="50,12 14,38 28,82 50,82" class="paintable-segment" data-segment-key="pentagonLeft" onclick="paintShapesSegment('pentagonLeft', this)"/>
-                <polygon points="50,12 50,82 72,82 86,38" class="paintable-segment" data-segment-key="pentagonRight" onclick="paintShapesSegment('pentagonRight', this)"/>
+                <polygon points="50,12 14,38 28,82 50,82" class="paintable-segment" data-segment-key="pentagonLeft" onclick="paintShapesSegment('pentagonLeft', this, event)"/>
+                <polygon points="50,12 50,82 72,82 86,38" class="paintable-segment" data-segment-key="pentagonRight" onclick="paintShapesSegment('pentagonRight', this, event)"/>
               </svg>
             </div>
             <span class="canvas-title">خماسي (Pentagon)</span>

@@ -84,9 +84,9 @@ export class ColorsComponent {
         <div class="strip-color-indicator" id="strip-indicator-${i}"></div>
       `;
 
-      stripItem.addEventListener('click', () => {
+      stripItem.addEventListener('click', (e) => {
         if (this.isCountingDown) return;
-        this.paintStrip(i, stripItem);
+        this.paintStrip(i, stripItem, e);
       });
       this.stripsContainer.appendChild(stripItem);
     });
@@ -104,11 +104,9 @@ export class ColorsComponent {
     this.isCountingDown = true;
     logger.info('ColorsWorksheet', 'Strips Memory challenge countdown initialized.');
 
-    // Generate random colors from board lanes
     const colorsPool = rowsData.map(r => r.hex);
     const randomizedPattern = [...colorsPool].sort(() => Math.random() - 0.5);
 
-    // Apply colors visually to cards
     randomizedPattern.forEach((hex, i) => {
       const card = this.stripsContainer.querySelector(`[data-index="${i}"]`);
       if (card) {
@@ -122,14 +120,12 @@ export class ColorsComponent {
 
     gameState.startStripsMemoryChallenge(randomizedPattern);
 
-    // 5-second countdown loop
     for (let time = 5; time > 0; time--) {
       this.updateAssistantText(`احفظ ترتيب أشرطة الألوان! المتبقي: ${time} ثوانٍ`, `Memorize the strip colors! Countdown: ${time}s`);
       audioEngine.playGrab();
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    // Hide colors to trigger memory recall phase
     rowsData.forEach((_, i) => {
       const card = this.stripsContainer.querySelector(`[data-index="${i}"]`);
       if (card) {
@@ -160,7 +156,6 @@ export class ColorsComponent {
       circle: colorsPool[Math.floor(Math.random() * colorsPool.length)]
     };
 
-    // Apply colors visually to geometric outlines
     const squareEl = this.panel.querySelector('#color-shape-square');
     const triangleEl = this.panel.querySelector('#color-shape-triangle');
     const circleEl = this.panel.querySelector('#color-shape-circle');
@@ -177,7 +172,6 @@ export class ColorsComponent {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    // Hide colors to trigger memory recall phase
     this.resetShapes();
 
     this.isCountingDown = false;
@@ -187,7 +181,7 @@ export class ColorsComponent {
     );
   }
 
-  paintStrip(index, element) {
+  paintStrip(index, element, event) {
     if (!gameState.isStripsMemoryActive) {
       audioEngine.speak("اضغط على زر تحدي الأشرطة للبدء أولاً!", "ar");
       return;
@@ -199,6 +193,9 @@ export class ColorsComponent {
       return;
     }
 
+    const targetColor = gameState.targetStripsPattern[index];
+    const isCorrect = selectedColor.toUpperCase() === targetColor.toUpperCase();
+
     element.style.borderColor = selectedColor;
     element.style.borderWidth = '4px';
     element.style.borderStyle = 'solid';
@@ -206,12 +203,22 @@ export class ColorsComponent {
     if (indicator) indicator.style.backgroundColor = selectedColor;
 
     gameState.colorStrip(index, selectedColor);
-    audioEngine.playGrab();
+
+    if (isCorrect) {
+      audioEngine.playSuccess();
+      // Dispatch colorful particle burst at exact click/touch coordinates
+      window.dispatchEvent(new CustomEvent('celebration-burst', {
+        detail: { x: event.clientX, y: event.clientY, mini: true }
+      }));
+    } else {
+      audioEngine.playIncorrect();
+      this.shakeElement(element);
+    }
 
     this.checkStripsCompletion();
   }
 
-  paintShape(shapeKey, segmentEl) {
+  paintShape(shapeKey, segmentEl, event) {
     if (!gameState.isShapesMemoryActive) {
       audioEngine.speak("اضغط على زر تحدي الأشكال للبدء أولاً!", "ar");
       return;
@@ -223,9 +230,23 @@ export class ColorsComponent {
       return;
     }
 
+    const targetColor = gameState.targetShapesPattern[shapeKey];
+    const isCorrect = selectedColor.toUpperCase() === targetColor.toUpperCase();
+
     segmentEl.style.fill = selectedColor;
     gameState.colorShape(shapeKey, selectedColor);
-    audioEngine.playGrab();
+
+    if (isCorrect) {
+      audioEngine.playSuccess();
+      // Dispatch colorful particle burst at exact shape click coordinates
+      window.dispatchEvent(new CustomEvent('celebration-burst', {
+        detail: { x: event.clientX, y: event.clientY, mini: true }
+      }));
+    } else {
+      audioEngine.playIncorrect();
+      const targetEl = segmentEl.closest('.paint-canvas-target') || segmentEl;
+      this.shakeElement(targetEl);
+    }
 
     this.checkShapesCompletion();
   }
@@ -235,14 +256,12 @@ export class ColorsComponent {
     if (totalFilled === 6) {
       const isCorrect = gameState.validateStripsMemory();
       if (isCorrect) {
-        audioEngine.playSuccess();
         this.updateAssistantText("أحسنت! ذاكرتك الصورية للأشرطة ممتازة ومثالية!", "Fantastic! Your strip memory recall is perfect!");
         audioEngine.speak("أحسنت! ذاكرتك الصورية للأشرطة ممتازة ومثالية!", "ar", null,
           () => audioEngine.speak("Fantastic! Your strip memory recall is perfect!", "en")
         );
         window.dispatchEvent(new CustomEvent('colors-victory'));
       } else {
-        audioEngine.playIncorrect();
         this.updateAssistantText("بعض الأشرطة ليست في مكانها الصحيح! اضغط ابدأ التحدي مجدداً.", "Some strips are incorrect! Click Start challenge to retry.");
         audioEngine.speak("بعض الأشرطة ليست في مكانها الصحيح! اضغط ابدأ التحدي مجدداً.", "ar");
       }
@@ -254,14 +273,12 @@ export class ColorsComponent {
     if (totalFilled === 3) {
       const isCorrect = gameState.validateShapesMemory();
       if (isCorrect) {
-        audioEngine.playSuccess();
         this.updateAssistantText("رائع ومذهل! لقد تذكرت ألوان الأشكال الهندسية بنجاح!", "Amazing! You successfully remembered the geometric colors!");
         audioEngine.speak("رائع ومذهل! لقد تذكرت ألوان الأشكال الهندسية بنجاح!", "ar", null,
           () => audioEngine.speak("Amazing! You successfully remembered the geometric colors!", "en")
         );
         window.dispatchEvent(new CustomEvent('colors-victory'));
       } else {
-        audioEngine.playIncorrect();
         this.updateAssistantText("تلوين الأشكال خاطئ! اضغط ابدأ التحدي لتثبيت النمط وتجربته مجدداً.", "Wrong shapes matching! Click Start challenge to retry.");
         audioEngine.speak("تلوين الأشكال خاطئ! اضغط ابدأ التحدي وتجربته مجدداً.", "ar");
       }

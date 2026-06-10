@@ -8,16 +8,31 @@ class AudioEngine {
     this.arabicVoice = null;
     this.englishVoice = null;
 
-    // Initialize speech synthesis voices once loaded
+    this.rightFiles = [
+      'assets/Voice/Right/silma-tts-audio-1781071832492.wav',
+      'assets/Voice/Right/silma-tts-audio-1781071845963.wav',
+      'assets/Voice/Right/silma-tts-audio-1781071863250.wav',
+      'assets/Voice/Right/silma-tts-audio-1781071875546.wav',
+      'assets/Voice/Right/silma-tts-audio-1781071888713.wav',
+      'assets/Voice/Right/silma-tts-audio-1781071899513.wav',
+      'assets/Voice/Right/silma-tts-audio-1781071909032.wav'
+    ];
+
+    this.wrongFiles = [
+      'assets/Voice/Wrong/silma-tts-audio-1781071944983.wav',
+      'assets/Voice/Wrong/silma-tts-audio-1781071955134.wav',
+      'assets/Voice/Wrong/silma-tts-audio-1781071971486.wav',
+      'assets/Voice/Wrong/silma-tts-audio-1781071980166.wav',
+      'assets/Voice/Wrong/silma-tts-audio-1781071990773.wav',
+      'assets/Voice/Wrong/silma-tts-audio-1781072004004.wav'
+    ];
+
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.onvoiceschanged = () => this._loadVoices();
       this._loadVoices();
     }
   }
 
-  /**
-   * Initializes the AudioContext upon user gesture.
-   */
   async init() {
     if (!this.ctx) {
       try {
@@ -37,18 +52,9 @@ class AudioEngine {
   _loadVoices() {
     if (!('speechSynthesis' in window)) return;
     const voices = window.speechSynthesis.getVoices();
-    
-    // Select best Arabic voice
     this.arabicVoice = voices.find(v => v.lang.startsWith('ar')) || null;
-    
-    // Select best English voice
     this.englishVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
                          voices.find(v => v.lang.startsWith('en')) || null;
-
-    logger.debug('Audio', 'Voices loaded.', {
-      arabic: this.arabicVoice ? this.arabicVoice.name : 'None found',
-      english: this.englishVoice ? this.englishVoice.name : 'None found'
-    });
   }
 
   toggleMute() {
@@ -63,9 +69,28 @@ class AudioEngine {
     return this.ttsEnabled;
   }
 
-  /**
-   * Synthesize sound using oscillators and envelope gain.
-   */
+  _playLocalWav(fileUrl) {
+    if (this.isMuted) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      try {
+        const audio = new Audio(fileUrl);
+        audio.preload = 'auto';
+        audio.play()
+          .then(() => {
+            logger.info('Audio', `Playing custom audio track: ${fileUrl}`);
+            resolve(true);
+          })
+          .catch((err) => {
+            logger.warn('Audio', `Failed playing custom file ${fileUrl}: ${err.message}`);
+            resolve(false);
+          });
+      } catch (e) {
+        logger.warn('Audio', `Error initializing audio for ${fileUrl}: ${e.message}`);
+        resolve(false);
+      }
+    });
+  }
+
   _synth(frequency, type, duration, gainVal = 0.12, sweepToFreq = null) {
     if (this.isMuted || !this.ctx) return;
 
@@ -89,36 +114,46 @@ class AudioEngine {
       osc.start();
       osc.stop(this.ctx.currentTime + duration);
     } catch (e) {
-      logger.warn('Audio', 'Oscillator synthesis failed.', e.message);
+      logger.warn('Audio', 'Oscillator fallback failed.', e.message);
     }
   }
 
   playGrab() {
     this.init();
-    // Short pop click sound
     this._synth(600, 'sine', 0.05, 0.15, 300);
   }
 
   playSuccess() {
     this.init();
-    // Ascending arpeggio (C5 -> E5 -> G5 -> C6)
-    const notes = [523.25, 659.25, 783.99, 1046.50];
-    notes.forEach((freq, index) => {
-      setTimeout(() => {
-        this._synth(freq, 'triangle', 0.25, 0.12);
-      }, index * 90);
+    const randomWav = this.rightFiles[Math.floor(Math.random() * this.rightFiles.length)];
+    this._playLocalWav(randomWav).then((played) => {
+      // Play a fast sparkling game pop sound as a secondary layer
+      this._synth(880, 'sine', 0.15, 0.1); 
+      setTimeout(() => this._synth(1320, 'sine', 0.2, 0.08), 80);
+
+      if (!played) {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, index) => {
+          setTimeout(() => {
+            this._synth(freq, 'triangle', 0.25, 0.12);
+          }, index * 90);
+        });
+      }
     });
   }
 
   playIncorrect() {
     this.init();
-    // Buzz down frequency
-    this._synth(180, 'sawtooth', 0.35, 0.15, 90);
+    const randomWav = this.wrongFiles[Math.floor(Math.random() * this.wrongFiles.length)];
+    this._playLocalWav(randomWav).then((played) => {
+      if (!played) {
+        this._synth(180, 'sawtooth', 0.35, 0.15, 90);
+      }
+    });
   }
 
   playCloseTry() {
     this.init();
-    // Double pulse alert
     this._synth(380, 'triangle', 0.12, 0.12);
     setTimeout(() => {
       this._synth(440, 'triangle', 0.18, 0.12);
@@ -127,18 +162,16 @@ class AudioEngine {
 
   playSlideBack() {
     this.init();
-    // Downward sweep representing piece sliding back to tray
     this._synth(400, 'sine', 0.3, 0.15, 150);
   }
 
-  /**
-   * Speak text in Arabic or English.
-   * @param {string} text Text to read.
-   * @param {string} lang Language code ('ar' or 'en').
-   * @param {Function} onStart Callback on start of speech.
-   * @param {Function} onEnd Callback on completion.
-   */
   speak(text, lang = 'ar', onStart = null, onEnd = null) {
+    if (lang === 'en') {
+      if (onStart) onStart();
+      if (onEnd) onEnd();
+      return;
+    }
+
     if (this.isMuted || !this.ttsEnabled || !('speechSynthesis' in window)) {
       if (onStart) onStart();
       if (onEnd) setTimeout(onEnd, 1500);
@@ -146,19 +179,16 @@ class AudioEngine {
     }
 
     try {
-      // Cancel ongoing speech
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-US';
+      utterance.lang = 'ar-SA';
       
-      const voice = lang === 'ar' ? this.arabicVoice : this.englishVoice;
-      if (voice) {
-        utterance.voice = voice;
+      if (this.arabicVoice) {
+        utterance.voice = this.arabicVoice;
       }
       
-      // Speech speed, pitch parameters optimized for kids
-      utterance.rate = lang === 'ar' ? 0.9 : 0.95;
+      utterance.rate = 0.9;
       utterance.pitch = 1.15; 
 
       if (onStart) utterance.onstart = onStart;
@@ -169,7 +199,7 @@ class AudioEngine {
       };
 
       window.speechSynthesis.speak(utterance);
-      logger.info('Audio', `Speaking (${lang}): "${text}"`);
+      logger.info('Audio', `Speaking (ar): "${text}"`);
     } catch (e) {
       logger.error('Audio', 'Failed to speak text.', e);
       if (onEnd) onEnd();
