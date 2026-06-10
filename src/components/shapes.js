@@ -7,15 +7,19 @@ export class ShapesComponent {
     this.panel = panelEl;
     this.paletteWrapper = panelEl.querySelector('#shapes-palette-wrapper');
     this.sequenceContainer = panelEl.querySelector('#pattern-sequence-container');
+    this.btnShowRef = panelEl.querySelector('#btn-shapes-show-ref');
+    this.refContainer = panelEl.querySelector('.reference-shapes-container');
+    this.btnNewPattern = panelEl.querySelector('#btn-shapes-new-pattern');
     this.unsubscribeState = null;
   }
 
   mount() {
-    logger.info('ShapesWorksheet', 'Mounting Shapes Worksheet Component...');
+    logger.info('ShapesWorksheet', 'Mounting Shapes Component...');
     this.renderPalette();
     this.renderReferenceCard();
     this.resetShapes();
     this.renderSequence();
+    this.bindLocalEvents();
 
     this.unsubscribeState = gameState.subscribe((state) => {
       if (state.activeTab !== 'shapes') return;
@@ -23,23 +27,48 @@ export class ShapesComponent {
     });
 
     audioEngine.speak(
-      "لوّن مجسمات الأشكال المنقسمة واستكمل السلسلة المتكررة!",
+      "تحدي الأنماط الهندسية! انظر إلى بطاقة الأمثلة واحفظ تركيبها، ثم اضغط على زر التغطية لاختبار ذاكرتك البصرية!",
       'ar',
       null,
-      () => audioEngine.speak("Paint the split shapes and complete the repeating pattern!", 'en')
+      () => audioEngine.speak("Geometry pattern recall! Memorize the split shape colors, hide the card, and try to replicate them!", 'en')
     );
   }
 
   unmount() {
-    logger.info('ShapesWorksheet', 'Unmounting Shapes Worksheet Component...');
+    logger.info('ShapesWorksheet', 'Unmounting Shapes Component...');
     if (this.unsubscribeState) {
       this.unsubscribeState();
     }
   }
 
+  bindLocalEvents() {
+    if (this.btnShowRef && this.refContainer) {
+      this.btnShowRef.addEventListener('click', () => {
+        const isHidden = this.refContainer.style.display === 'none';
+        this.refContainer.style.display = isHidden ? 'flex' : 'none';
+        this.btnShowRef.textContent = isHidden ? 'تغطية أمثلة التركيب 🙈' : 'كشف أمثلة التركيب 👁️';
+        this.btnShowRef.classList.toggle('active', isHidden);
+
+        if (isHidden) {
+          audioEngine.speak("احفظ توزيع الألوان جيداً في ذاكرتك لتلّون الأشكال بنجاح!", "ar");
+        } else {
+          audioEngine.speak("تمت تغطية الأمثلة بنجاح. ابدأ بتلوين الأشكال الآن!", "ar");
+        }
+      });
+    }
+
+    if (this.btnNewPattern) {
+      this.btnNewPattern.addEventListener('click', () => {
+        gameState.generateRandomPattern();
+        this.renderSequence();
+        audioEngine.playGrab();
+        audioEngine.speak("تم إنشاء نمط هندسي جديد! أكمل السلسلة الآن.", "ar");
+      });
+    }
+  }
+
   renderPalette() {
     this.paletteWrapper.innerHTML = '';
-
     rowsData.forEach(row => {
       const pot = document.createElement('div');
       pot.className = 'color-pot';
@@ -61,16 +90,11 @@ export class ShapesComponent {
 
       this.paletteWrapper.appendChild(pot);
     });
-    logger.debug('ShapesWorksheet', 'Shapes sheet paint palette rendered.');
   }
 
   renderReferenceCard() {
-    const container = this.panel.querySelector('.reference-shapes-container');
-    if (!container) return;
-
-    // Static examples matching the paper worksheets:
-    // Rectangle: Red/White, Circle: Green/Blue, Oval: Green/Yellow, Triangle: Blue/Yellow, Pentagon: White/Black
-    container.innerHTML = `
+    if (!this.refContainer) return;
+    this.refContainer.innerHTML = `
       <div class="ref-shape-wrapper">
         <svg class="ref-svg" viewBox="0 0 100 100">
           <rect x="10" y="25" width="40" height="50" fill="#D21B1B" stroke="#333" stroke-width="2"/>
@@ -107,7 +131,6 @@ export class ShapesComponent {
         <span class="ref-title">خماسي (Pentagon)</span>
       </div>
     `;
-    logger.debug('ShapesWorksheet', 'Reference cards drawn.');
   }
 
   resetShapes() {
@@ -115,30 +138,17 @@ export class ShapesComponent {
     segments.forEach(seg => {
       seg.style.fill = '#ffffff';
     });
-    logger.debug('ShapesWorksheet', 'Split shape colors reset.');
   }
 
   renderSequence() {
     this.sequenceContainer.innerHTML = '';
-
-    // Pattern: Red -> Yellow -> Red -> [?] -> Red -> Yellow
-    const pattern = [
-      { color: '#D21B1B', interactive: false },
-      { color: '#FBC507', interactive: false },
-      { color: '#D21B1B', interactive: false },
-      { color: '#FFFFFF', interactive: true, id: 3 },
-      { color: '#D21B1B', interactive: false },
-      { color: '#FBC507', interactive: false }
-    ];
-
-    pattern.forEach(cell => {
+    gameState.currentSequencePattern.forEach(cell => {
       const cellEl = document.createElement('div');
       cellEl.className = 'sequence-cell';
       
       if (cell.interactive) {
         cellEl.className = 'sequence-cell question-mark';
         cellEl.textContent = '؟';
-        
         cellEl.addEventListener('click', () => this.paintSequenceCell(cell.id, cellEl));
       } else {
         cellEl.style.backgroundColor = cell.color;
@@ -146,7 +156,6 @@ export class ShapesComponent {
 
       this.sequenceContainer.appendChild(cellEl);
     });
-    logger.debug('ShapesWorksheet', 'Sequence pattern rendered.');
   }
 
   paintSegment(segmentKey, segmentEl) {
@@ -175,8 +184,8 @@ export class ShapesComponent {
       const targetEl = segmentEl.closest('.paint-canvas-target') || segmentEl;
       this.shakeElement(targetEl);
       
-      const arMsg = "هذا اللون غير مطابق للمثال السابق لهذا الجزء!";
-      const enMsg = "This color does not match the example for this part!";
+      const arMsg = "تذكر جيداً! هذا الجزء يحمل لوناً مختلفاً في ورقة الأمثلة المغطاة.";
+      const enMsg = "Incorrect! This segment color does not match the reference layout.";
       this.updateAssistantText(arMsg, enMsg);
       audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
       return;
@@ -186,10 +195,9 @@ export class ShapesComponent {
     gameState.colorSplitShapeSegment(segmentKey, selectedColor);
     audioEngine.playSuccess();
 
-    // Praise
     const praises = [
-      { text: "Correct match!", ar: "مطابقة صحيحة!" },
-      { text: "Well done!", ar: "عمل رائع!" }
+      { text: "Spot on! That is correct.", ar: "رائع! لقد تذكرت اللون الصحيح." },
+      { text: "Fantastic memory match!", ar: "مطابقة ممتازة من الذاكرة!" }
     ];
     const praise = praises[Math.floor(Math.random() * praises.length)];
     this.updateAssistantText(praise.ar, praise.text);
@@ -205,13 +213,14 @@ export class ShapesComponent {
       return;
     }
 
-    // Correct color for the sequence question cell (index 3) is Yellow (#FBC507)
-    if (selectedColor.toUpperCase() !== '#FBC507') {
+    const targetPatternColor = gameState.currentSequencePattern[3].color;
+
+    if (selectedColor.toUpperCase() !== targetPatternColor.toUpperCase()) {
       audioEngine.playIncorrect();
       this.shakeElement(cellEl);
 
-      const arMsg = "حاول مرة أخرى! انظر إلى ترتيب الألوان في النمط.";
-      const enMsg = "Try again! Look at the order of colors in the pattern.";
+      const arMsg = " النمط خاطئ! انظر إلى ترتيب تكرار الألوان لتكتشف الحل.";
+      const enMsg = "Incorrect pattern step! Analyze the color sequence to find the pattern.";
       this.updateAssistantText(arMsg, enMsg);
       audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
       return;
@@ -224,9 +233,8 @@ export class ShapesComponent {
     gameState.setSequenceAnswer(index, selectedColor);
     audioEngine.playSuccess();
 
-    // Praise
-    this.updateAssistantText("رائع! لقد أكملت النمط بنجاح.", "Fantastic! You completed the pattern successfully.");
-    audioEngine.speak("رائع! لقد أكملت النمط بنجاح.", 'ar', null, () => audioEngine.speak("Fantastic! You completed the pattern successfully.", 'en'));
+    this.updateAssistantText("عمل مدهش! لقد استكملت النمط الهندسي الذكي بنجاح.", "Excellent! You completed the geometry pattern loop successfully.");
+    audioEngine.speak("عمل مدهش! لقد استكملت النمط الهندسي الذكي بنجاح.", 'ar', null, () => audioEngine.speak("Excellent! You completed the geometry pattern loop successfully.", 'en'));
 
     this.checkCompletion();
   }
@@ -249,13 +257,11 @@ export class ShapesComponent {
   }
 
   syncUIWithState() {
-    // Active palette color
     const activeColor = gameState.shapesSelectedColor;
     this.paletteWrapper.querySelectorAll('.color-pot').forEach(pot => {
       pot.classList.toggle('active', pot.dataset.hex === activeColor);
     });
 
-    // Sync split shapes
     for (const [key, color] of Object.entries(gameState.shapesSplitColors)) {
       const segmentEl = this.panel.querySelector(`[data-segment-key="${key}"]`);
       if (segmentEl) {
@@ -263,7 +269,6 @@ export class ShapesComponent {
       }
     }
 
-    // Sync sequence cell
     const seqCell = this.sequenceContainer.querySelector('.sequence-cell:nth-child(4)');
     const cellAnswer = gameState.sequenceAnswers[3];
     if (seqCell) {
@@ -285,18 +290,6 @@ export class ShapesComponent {
       logger.success('ShapesWorksheet', 'Shapes worksheet validation passed!');
       const event = new CustomEvent('shapes-victory');
       window.dispatchEvent(event);
-    } else {
-      const allSegmentsFilled = Object.values(gameState.shapesSplitColors).every(c => c !== null);
-      const seqFilled = gameState.sequenceAnswers[3] !== null;
-
-      if (allSegmentsFilled && seqFilled) {
-        logger.warn('ShapesWorksheet', 'All slots colored, but validation failed.');
-        audioEngine.playIncorrect();
-        const arMsg = "بعض الألوان خاطئة، انظر إلى نماذج ورقة العمل!";
-        const enMsg = "Some colors are incorrect. Check the worksheet examples!";
-        this.updateAssistantText(arMsg, enMsg);
-        audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
-      }
     }
   }
 

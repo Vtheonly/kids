@@ -12,12 +12,12 @@ export const SHAPES_MAP = {
 };
 
 export const ROWS_DATA = [
-  { color: 'blue', shapes: [SHAPES_MAP.OVAL_H, SHAPES_MAP.HEXAGON, SHAPES_MAP.SQUARE], ar: 'الأزرق', en: 'blue', hex: '#0A5EA5' },
-  { color: 'green', shapes: [SHAPES_MAP.RECTANGLE, SHAPES_MAP.TRIANGLE, SHAPES_MAP.CIRCLE], ar: 'الأخضر', en: 'green', hex: '#2B803E' },
-  { color: 'yellow', shapes: [SHAPES_MAP.OVAL_V, SHAPES_MAP.HEXAGON, SHAPES_MAP.PENTAGON], ar: 'الأصفر', en: 'yellow', hex: '#FBC507' },
-  { color: 'red', shapes: [SHAPES_MAP.CIRCLE, SHAPES_MAP.TRIANGLE, SHAPES_MAP.SQUARE], ar: 'الأحمر', en: 'red', hex: '#D21B1B' },
-  { color: 'white', shapes: [SHAPES_MAP.HEXAGON, SHAPES_MAP.SQUARE, SHAPES_MAP.TRIANGLE], ar: 'الأبيض', en: 'white', hex: '#FFFFFF' },
-  { color: 'black', shapes: [SHAPES_MAP.RECTANGLE, SHAPES_MAP.PENTAGON, SHAPES_MAP.OVAL_H], ar: 'الأسود', en: 'black', hex: '#1A1A1D' }
+  { color: 'blue', shapes: [SHAPES_MAP.OVAL_H, SHAPES_MAP.HEXAGON, SHAPES_MAP.SQUARE], ar: 'الأزرق', en: 'blue', hex: '#0A5EA5', anchor: '🌊', anchorAr: 'البحر', anchorEn: 'Sea' },
+  { color: 'green', shapes: [SHAPES_MAP.RECTANGLE, SHAPES_MAP.TRIANGLE, SHAPES_MAP.CIRCLE], ar: 'الأخضر', en: 'green', hex: '#2B803E', anchor: '🍃', anchorAr: 'الورقة', anchorEn: 'Leaf' },
+  { color: 'yellow', shapes: [SHAPES_MAP.OVAL_V, SHAPES_MAP.HEXAGON, SHAPES_MAP.PENTAGON], ar: 'الأصفر', en: 'yellow', hex: '#FBC507', anchor: '🍌', anchorAr: 'الموزة', anchorEn: 'Banana' },
+  { color: 'red', shapes: [SHAPES_MAP.CIRCLE, SHAPES_MAP.TRIANGLE, SHAPES_MAP.SQUARE], ar: 'الأحمر', en: 'red', hex: '#D21B1B', anchor: '🍎', anchorAr: 'التفاحة', anchorEn: 'Apple' },
+  { color: 'white', shapes: [SHAPES_MAP.HEXAGON, SHAPES_MAP.SQUARE, SHAPES_MAP.TRIANGLE], ar: 'الأبيض', en: 'white', hex: '#FFFFFF', anchor: '❄️', anchorAr: 'الثلج', anchorEn: 'Snow' },
+  { color: 'black', shapes: [SHAPES_MAP.RECTANGLE, SHAPES_MAP.PENTAGON, SHAPES_MAP.OVAL_H], ar: 'الأسود', en: 'black', hex: '#1A1A1D', anchor: '🐈‍⬛', anchorAr: 'القط الأسود', anchorEn: 'Black Cat' }
 ];
 
 export const TRANSLATIONS = {
@@ -40,23 +40,33 @@ class GameState {
   }
 
   reset() {
-    this.activeTab = 'board'; // 'board', 'colors', 'shapes'
-    this.mode = 'challenge'; // 'challenge', 'free'
+    this.activeTab = 'board'; 
+    this.mode = 'challenge'; 
     this.currentChallenge = null;
-    this.activeDraggable = null;
     
     // Board State
-    this.boardFilledSlots = {}; // slotId -> stencilId
+    this.boardFilledSlots = {}; 
     this.totalBoardSlots = 18;
 
-    // Colors Worksheet State
+    // Colors Worksheet Memory State
     this.colorsSelectedColor = null;
-    this.coloredStrips = {}; // stripIndex -> colorHex
+    this.coloredStrips = {}; 
     this.coloredShapes = {
       square: null,
       triangle: null,
       circle: null
     };
+
+    // Show-and-Hide targets
+    this.targetStripsPattern = []; // Generated randomly at start of challenge
+    this.targetShapesPattern = {
+      square: null,
+      triangle: null,
+      circle: null
+    };
+
+    this.isStripsMemoryActive = false;
+    this.isShapesMemoryActive = false;
 
     // Shapes Worksheet State
     this.shapesSelectedColor = null;
@@ -72,9 +82,12 @@ class GameState {
       rectangleLeft: null,
       rectangleRight: null
     };
-    this.sequenceAnswers = Array(6).fill(null); // slots 0-5. Slot 3 is interactive question
+    
+    this.sequenceAnswers = Array(6).fill(null);
+    this.currentSequencePattern = []; 
+    this.generateRandomPattern();
 
-    logger.info('State', 'Game state has been reset/initialized.');
+    logger.info('State', 'Game state has been reset.');
     this.notify();
   }
 
@@ -119,27 +132,34 @@ class GameState {
     this.notify();
   }
 
-  // Board operations
   fillBoardSlot(slotId, stencilId) {
     this.boardFilledSlots[slotId] = stencilId;
     const count = Object.keys(this.boardFilledSlots).length;
-    logger.info('State', `Board slot filled: ${slotId} with stencil: ${stencilId}. Total filled: ${count}/${this.totalBoardSlots}`);
+    logger.info('State', `Board slot filled: ${slotId}. Total filled: ${count}/${this.totalBoardSlots}`);
     this.notify();
-  }
-
-  clearBoardSlot(slotId) {
-    if (this.boardFilledSlots[slotId]) {
-      delete this.boardFilledSlots[slotId];
-      logger.info('State', `Board slot cleared: ${slotId}. Total filled: ${Object.keys(this.boardFilledSlots).length}`);
-      this.notify();
-    }
   }
 
   isBoardComplete() {
     return Object.keys(this.boardFilledSlots).length === this.totalBoardSlots;
   }
 
-  // Colors Worksheet operations
+  // Flash Memory Mode setters
+  startStripsMemoryChallenge(colors) {
+    this.targetStripsPattern = colors;
+    this.coloredStrips = {};
+    this.isStripsMemoryActive = true;
+    logger.info('State', 'Strips Flash Memory Challenge pattern generated', colors);
+    this.notify();
+  }
+
+  startShapesMemoryChallenge(colorsMap) {
+    this.targetShapesPattern = colorsMap;
+    this.coloredShapes = { square: null, triangle: null, circle: null };
+    this.isShapesMemoryActive = true;
+    logger.info('State', 'Shapes Flash Memory Challenge pattern generated', colorsMap);
+    this.notify();
+  }
+
   colorStrip(index, colorHex) {
     this.coloredStrips[index] = colorHex;
     logger.info('State', `Colors sheet strip ${index} colored with: ${colorHex}`);
@@ -152,47 +172,20 @@ class GameState {
     this.notify();
   }
 
-  validateColorsSheet() {
-    // 6 strips must be colored in order of board lanes: Blue, Green, Yellow, Red, White, Black
-    const correctStrips = ['#0A5EA5', '#2B803E', '#FBC507', '#D21B1B', '#FFFFFF', '#1A1A1D'];
-    const stripsComplete = correctStrips.every((correctHex, idx) => {
+  validateStripsMemory() {
+    if (!this.isStripsMemoryActive || this.targetStripsPattern.length === 0) return false;
+    return this.targetStripsPattern.every((targetHex, idx) => {
       const current = this.coloredStrips[idx];
-      return current && current.toUpperCase() === correctHex.toUpperCase();
+      return current && current.toUpperCase() === targetHex.toUpperCase();
     });
+  }
 
-    // Shapes validation based on board locations:
-    // Square: Blue, Red, White
-    // Triangle: Green, Red, White
-    // Circle: Green, Red
-    const squareValid = ['#0A5EA5', '#D21B1B', '#FFFFFF'];
-    const triangleValid = ['#2B803E', '#D21B1B', '#FFFFFF'];
-    const circleValid = ['#2B803E', '#D21B1B'];
-
-    const squareVal = this.coloredShapes.square;
-    const triangleVal = this.coloredShapes.triangle;
-    const circleVal = this.coloredShapes.circle;
-
-    const squareCorrect = squareVal && squareValid.includes(squareVal.toUpperCase());
-    const triangleCorrect = triangleVal && triangleValid.includes(triangleVal.toUpperCase());
-    const circleCorrect = circleVal && circleValid.includes(circleVal.toUpperCase());
-
-    const isComplete = stripsComplete && squareCorrect && triangleCorrect && circleCorrect;
-    
-    logger.debug('State', 'Colors sheet validation status', {
-      stripsComplete,
-      squareCorrect,
-      triangleCorrect,
-      circleCorrect,
-      isComplete
-    });
-
-    return {
-      isComplete,
-      stripsComplete,
-      squareCorrect,
-      triangleCorrect,
-      circleCorrect
-    };
+  validateShapesMemory() {
+    if (!this.isShapesMemoryActive) return false;
+    const sCorrect = this.coloredShapes.square && this.coloredShapes.square.toUpperCase() === this.targetShapesPattern.square.toUpperCase();
+    const tCorrect = this.coloredShapes.triangle && this.coloredShapes.triangle.toUpperCase() === this.targetShapesPattern.triangle.toUpperCase();
+    const cCorrect = this.coloredShapes.circle && this.coloredShapes.circle.toUpperCase() === this.targetShapesPattern.circle.toUpperCase();
+    return sCorrect && tCorrect && cCorrect;
   }
 
   // Shapes Worksheet operations
@@ -208,13 +201,26 @@ class GameState {
     this.notify();
   }
 
+  generateRandomPattern() {
+    const colorsList = ['#D21B1B', '#FBC507', '#0A5EA5', '#2B803E'];
+    const colA = colorsList[Math.floor(Math.random() * colorsList.length)];
+    let colB = colorsList[Math.floor(Math.random() * colorsList.length)];
+    while (colB === colA) {
+      colB = colorsList[Math.floor(Math.random() * colorsList.length)];
+    }
+
+    this.currentSequencePattern = [
+      { color: colA, interactive: false },
+      { color: colB, interactive: false },
+      { color: colA, interactive: false },
+      { color: colB, interactive: true, id: 3 }, 
+      { color: colA, interactive: false },
+      { color: colB, interactive: false }
+    ];
+    this.sequenceAnswers = Array(6).fill(null);
+  }
+
   validateShapesSheet() {
-    // Split shapes exact patterns:
-    // 1. Circle (split-circle): Left Green, Right Blue
-    // 2. Triangle (split-triangle): Left Blue, Right Yellow
-    // 3. Pentagon (split-pentagon): Left White, Right Black
-    // 4. Oval (split-oval): Top Green, Bottom Yellow
-    // 5. Rectangle (split-rectangle): Left Red, Right White
     const targets = {
       circleLeft: '#2B803E',
       circleRight: '#0A5EA5',
@@ -229,31 +235,21 @@ class GameState {
     };
 
     let splitsCorrect = true;
-    const splitReport = {};
     for (const [key, targetColor] of Object.entries(targets)) {
       const current = this.shapesSplitColors[key];
       const match = current && current.toUpperCase() === targetColor.toUpperCase();
-      splitReport[key] = match;
       if (!match) splitsCorrect = false;
     }
 
-    // Sequence check: Red -> Yellow -> Red -> [?] -> Red -> Yellow
-    // The missing element (index 3) must be Yellow (#FBC507)
+    const targetPatternColor = this.currentSequencePattern[3].color;
     const sequenceCorrect = this.sequenceAnswers[3] && 
-                            this.sequenceAnswers[3].toUpperCase() === '#FBC507';
+                            this.sequenceAnswers[3].toUpperCase() === targetPatternColor.toUpperCase();
 
     const isComplete = splitsCorrect && sequenceCorrect;
-
-    logger.debug('State', 'Shapes sheet validation status', {
-      splitsCorrect,
-      sequenceCorrect,
-      isComplete
-    });
 
     return {
       isComplete,
       splitsCorrect,
-      splitReport,
       sequenceCorrect
     };
   }

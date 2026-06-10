@@ -7,14 +7,18 @@ export class ColorsComponent {
     this.panel = panelEl;
     this.paletteWrapper = panelEl.querySelector('#colors-palette-wrapper');
     this.stripsContainer = panelEl.querySelector('.strips-coloring-section');
+    this.btnStartStripsChallenge = panelEl.querySelector('#btn-start-strips-challenge');
+    this.btnStartShapesChallenge = panelEl.querySelector('#btn-start-shapes-challenge');
     this.unsubscribeState = null;
+    this.isCountingDown = false;
   }
 
   mount() {
-    logger.info('ColorsWorksheet', 'Mounting Colors Worksheet Component...');
+    logger.info('ColorsWorksheet', 'Mounting Colors Component...');
     this.renderStrips();
     this.renderPalette();
     this.resetShapes();
+    this.bindLocalEvents();
 
     this.unsubscribeState = gameState.subscribe((state) => {
       if (state.activeTab !== 'colors') return;
@@ -22,23 +26,31 @@ export class ColorsComponent {
     });
 
     audioEngine.speak(
-      "لوّن الأشرطة والأشكال حسب لوحتك التفاعلية!",
+      "مرحباً بك في تحدي الذاكرة الصورية الفلاشية! اضغط على زر التحدي لحفظ الألوان وتذكرها.",
       'ar',
       null,
-      () => audioEngine.speak("Paint the strips and geometric shapes according to your board lanes!", 'en')
+      () => audioEngine.speak("Welcome to the Flash Memory challenge! Click the start buttons to display, hide, and recall color sequences.", 'en')
     );
   }
 
   unmount() {
-    logger.info('ColorsWorksheet', 'Unmounting Colors Worksheet Component...');
+    logger.info('ColorsWorksheet', 'Unmounting Colors Component...');
     if (this.unsubscribeState) {
       this.unsubscribeState();
     }
   }
 
+  bindLocalEvents() {
+    if (this.btnStartStripsChallenge) {
+      this.btnStartStripsChallenge.addEventListener('click', () => this.triggerStripsChallenge());
+    }
+    if (this.btnStartShapesChallenge) {
+      this.btnStartShapesChallenge.addEventListener('click', () => this.triggerShapesChallenge());
+    }
+  }
+
   renderPalette() {
     this.paletteWrapper.innerHTML = '';
-
     rowsData.forEach(row => {
       const pot = document.createElement('div');
       pot.className = 'color-pot';
@@ -46,141 +58,214 @@ export class ColorsComponent {
       pot.dataset.hex = row.hex;
       
       pot.addEventListener('click', () => {
-        // Toggle active selection
         this.paletteWrapper.querySelectorAll('.color-pot').forEach(p => p.classList.remove('active'));
         pot.classList.add('active');
 
         gameState.selectColor(row.hex, 'colors');
         audioEngine.playGrab();
-
-        const arVoice = `اخترت اللون ${row.ar}`;
-        const enVoice = `You selected ${row.en}`;
-        this.updateAssistantText(arVoice, enVoice);
-        audioEngine.speak(arVoice, 'ar', null, () => audioEngine.speak(enVoice, 'en'));
       });
 
       this.paletteWrapper.appendChild(pot);
     });
-    logger.debug('ColorsWorksheet', 'Color palette rendered.');
   }
 
   renderStrips() {
     this.stripsContainer.innerHTML = '';
 
-    // Render 6 vertical strips
-    for (let i = 0; i < 6; i++) {
+    rowsData.forEach((row, i) => {
       const stripItem = document.createElement('div');
-      stripItem.className = 'strip-item';
+      stripItem.className = 'strip-item nature-anchor-card';
       stripItem.dataset.index = i;
 
-      const numberLabel = document.createElement('span');
-      numberLabel.className = 'strip-number';
-      numberLabel.textContent = i + 1;
+      stripItem.innerHTML = `
+        <span class="strip-number">${i + 1}</span>
+        <div class="nature-anchor-emoji" title="${row.anchorAr}">${row.anchor}</div>
+        <span class="nature-anchor-title">${row.anchorAr}</span>
+        <div class="strip-color-indicator" id="strip-indicator-${i}"></div>
+      `;
 
-      const indicator = document.createElement('div');
-      indicator.className = 'strip-color-indicator';
-      indicator.id = `strip-indicator-${i}`;
-
-      stripItem.appendChild(numberLabel);
-      stripItem.appendChild(indicator);
-
-      stripItem.addEventListener('click', () => this.paintStrip(i, stripItem));
+      stripItem.addEventListener('click', () => {
+        if (this.isCountingDown) return;
+        this.paintStrip(i, stripItem);
+      });
       this.stripsContainer.appendChild(stripItem);
-    }
-    logger.debug('ColorsWorksheet', 'Strips grid rendered.');
+    });
   }
 
   resetShapes() {
-    // Reset shape segment fills to white
     const segments = this.panel.querySelectorAll('.paintable-segment');
     segments.forEach(seg => {
       seg.style.fill = '#ffffff';
     });
-    logger.debug('ColorsWorksheet', 'Shapes colored states reset.');
+  }
+
+  async triggerStripsChallenge() {
+    if (this.isCountingDown) return;
+    this.isCountingDown = true;
+    logger.info('ColorsWorksheet', 'Strips Memory challenge countdown initialized.');
+
+    // Generate random colors from board lanes
+    const colorsPool = rowsData.map(r => r.hex);
+    const randomizedPattern = [...colorsPool].sort(() => Math.random() - 0.5);
+
+    // Apply colors visually to cards
+    randomizedPattern.forEach((hex, i) => {
+      const card = this.stripsContainer.querySelector(`[data-index="${i}"]`);
+      if (card) {
+        card.style.borderColor = hex;
+        card.style.borderWidth = '4px';
+        card.style.borderStyle = 'solid';
+        const indicator = card.querySelector('.strip-color-indicator');
+        if (indicator) indicator.style.backgroundColor = hex;
+      }
+    });
+
+    gameState.startStripsMemoryChallenge(randomizedPattern);
+
+    // 5-second countdown loop
+    for (let time = 5; time > 0; time--) {
+      this.updateAssistantText(`احفظ ترتيب أشرطة الألوان! المتبقي: ${time} ثوانٍ`, `Memorize the strip colors! Countdown: ${time}s`);
+      audioEngine.playGrab();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // Hide colors to trigger memory recall phase
+    rowsData.forEach((_, i) => {
+      const card = this.stripsContainer.querySelector(`[data-index="${i}"]`);
+      if (card) {
+        card.style.borderColor = '';
+        card.style.borderWidth = '';
+        card.style.borderStyle = '';
+        const indicator = card.querySelector('.strip-color-indicator');
+        if (indicator) indicator.style.backgroundColor = '#f1f3f5';
+      }
+    });
+
+    this.isCountingDown = false;
+    this.updateAssistantText("الآن أعد تلوين الأشرطة من ذاكرتك بالترتيب الصحيح!", "Now paint the strips in the correct order from your memory!");
+    audioEngine.speak("الآن أعد تلوين الأشرطة من ذاكرتك بالترتيب الصحيح!", "ar", null,
+      () => audioEngine.speak("Now paint the strips in the correct order from memory!", "en")
+    );
+  }
+
+  async triggerShapesChallenge() {
+    if (this.isCountingDown) return;
+    this.isCountingDown = true;
+    logger.info('ColorsWorksheet', 'Shapes Memory challenge countdown initialized.');
+
+    const colorsPool = rowsData.map(r => r.hex);
+    const randColors = {
+      square: colorsPool[Math.floor(Math.random() * colorsPool.length)],
+      triangle: colorsPool[Math.floor(Math.random() * colorsPool.length)],
+      circle: colorsPool[Math.floor(Math.random() * colorsPool.length)]
+    };
+
+    // Apply colors visually to geometric outlines
+    const squareEl = this.panel.querySelector('#color-shape-square');
+    const triangleEl = this.panel.querySelector('#color-shape-triangle');
+    const circleEl = this.panel.querySelector('#color-shape-circle');
+
+    if (squareEl) squareEl.style.fill = randColors.square;
+    if (triangleEl) triangleEl.style.fill = randColors.triangle;
+    if (circleEl) circleEl.style.fill = randColors.circle;
+
+    gameState.startShapesMemoryChallenge(randColors);
+
+    for (let time = 5; time > 0; time--) {
+      this.updateAssistantText(`احفظ ألوان الأشكال الهندسية! المتبقي: ${time} ثوانٍ`, `Memorize the geometric colors! Countdown: ${time}s`);
+      audioEngine.playGrab();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // Hide colors to trigger memory recall phase
+    this.resetShapes();
+
+    this.isCountingDown = false;
+    this.updateAssistantText("الآن أعد تلوين الأشكال الهندسية الثلاثة كما كانت بالترتيب!", "Now color the three geometric shapes from memory!");
+    audioEngine.speak("الآن أعد تلوين الأشكال الهندسية الثلاثة كما كانت بالترتيب!", "ar", null,
+      () => audioEngine.speak("Now color the geometric shapes from memory!", "en")
+    );
   }
 
   paintStrip(index, element) {
+    if (!gameState.isStripsMemoryActive) {
+      audioEngine.speak("اضغط على زر تحدي الأشرطة للبدء أولاً!", "ar");
+      return;
+    }
+
     const selectedColor = gameState.colorsSelectedColor;
     if (!selectedColor) {
       this.warnSelectColor();
       return;
     }
 
-    const correctColor = rowsData[index].hex;
-    if (selectedColor.toUpperCase() !== correctColor.toUpperCase()) {
-      audioEngine.playIncorrect();
-      this.shakeElement(element);
-      const rowNameAr = rowsData[index].ar;
-      const rowNameEn = rowsData[index].en;
-      const arMsg = `هذا ليس اللون الصحيح! ابحث عن لون الصف ${rowNameAr} في اللوحة.`;
-      const enMsg = `Incorrect color! Look for the color of the ${rowNameEn} row on the board.`;
-      this.updateAssistantText(arMsg, enMsg);
-      audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
-      return;
-    }
-
-    element.style.backgroundColor = selectedColor;
+    element.style.borderColor = selectedColor;
+    element.style.borderWidth = '4px';
+    element.style.borderStyle = 'solid';
     const indicator = element.querySelector('.strip-color-indicator');
-    if (indicator) {
-      indicator.style.backgroundColor = selectedColor;
-    }
+    if (indicator) indicator.style.backgroundColor = selectedColor;
 
     gameState.colorStrip(index, selectedColor);
-    audioEngine.playSuccess();
+    audioEngine.playGrab();
 
-    // Praise
-    const praises = [
-      { text: "Correct strip color!", ar: "لون شريط صحيح!" },
-      { text: "Well done!", ar: "أحسنت!" }
-    ];
-    const praise = praises[Math.floor(Math.random() * praises.length)];
-    this.updateAssistantText(praise.ar, praise.text);
-    audioEngine.speak(praise.ar, 'ar', null, () => audioEngine.speak(praise.text, 'en'));
-
-    this.checkCompletion();
+    this.checkStripsCompletion();
   }
 
   paintShape(shapeKey, segmentEl) {
-    const selectedColor = gameState.colorsSelectedColor;
-    if (!selectedColor) {
-      this.warnSelectColor();
+    if (!gameState.isShapesMemoryActive) {
+      audioEngine.speak("اضغط على زر تحدي الأشكال للبدء أولاً!", "ar");
       return;
     }
 
-    const VALID_SHAPE_COLORS = {
-      square: ['#0A5EA5', '#D21B1B', '#FFFFFF'],
-      triangle: ['#2B803E', '#D21B1B', '#FFFFFF'],
-      circle: ['#2B803E', '#D21B1B']
-    };
-
-    const validColors = VALID_SHAPE_COLORS[shapeKey] || [];
-    const isValid = validColors.some(c => c.toUpperCase() === selectedColor.toUpperCase());
-
-    if (!isValid) {
-      audioEngine.playIncorrect();
-      const targetEl = segmentEl.closest('.paint-canvas-target') || segmentEl;
-      this.shakeElement(targetEl);
-      
-      const arMsg = "هذا الشكل لا يحمل هذا اللون في اللوحة التفاعلية!";
-      const enMsg = "This shape does not have this color on the interactive board!";
-      this.updateAssistantText(arMsg, enMsg);
-      audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
+    const selectedColor = gameState.colorsSelectedColor;
+    if (!selectedColor) {
+      this.warnSelectColor();
       return;
     }
 
     segmentEl.style.fill = selectedColor;
     gameState.colorShape(shapeKey, selectedColor);
-    audioEngine.playSuccess();
+    audioEngine.playGrab();
 
-    const praises = [
-      { text: "Excellent match!", ar: "مطابقة ممتازة!" },
-      { text: "That is correct!", ar: "هذا صحيح!" }
-    ];
-    const praise = praises[Math.floor(Math.random() * praises.length)];
-    this.updateAssistantText(praise.ar, praise.text);
-    audioEngine.speak(praise.ar, 'ar', null, () => audioEngine.speak(praise.text, 'en'));
+    this.checkShapesCompletion();
+  }
 
-    this.checkCompletion();
+  checkStripsCompletion() {
+    const totalFilled = Object.keys(gameState.coloredStrips).length;
+    if (totalFilled === 6) {
+      const isCorrect = gameState.validateStripsMemory();
+      if (isCorrect) {
+        audioEngine.playSuccess();
+        this.updateAssistantText("أحسنت! ذاكرتك الصورية للأشرطة ممتازة ومثالية!", "Fantastic! Your strip memory recall is perfect!");
+        audioEngine.speak("أحسنت! ذاكرتك الصورية للأشرطة ممتازة ومثالية!", "ar", null,
+          () => audioEngine.speak("Fantastic! Your strip memory recall is perfect!", "en")
+        );
+        window.dispatchEvent(new CustomEvent('colors-victory'));
+      } else {
+        audioEngine.playIncorrect();
+        this.updateAssistantText("بعض الأشرطة ليست في مكانها الصحيح! اضغط ابدأ التحدي مجدداً.", "Some strips are incorrect! Click Start challenge to retry.");
+        audioEngine.speak("بعض الأشرطة ليست في مكانها الصحيح! اضغط ابدأ التحدي مجدداً.", "ar");
+      }
+    }
+  }
+
+  checkShapesCompletion() {
+    const totalFilled = Object.values(gameState.coloredShapes).filter(c => c !== null).length;
+    if (totalFilled === 3) {
+      const isCorrect = gameState.validateShapesMemory();
+      if (isCorrect) {
+        audioEngine.playSuccess();
+        this.updateAssistantText("رائع ومذهل! لقد تذكرت ألوان الأشكال الهندسية بنجاح!", "Amazing! You successfully remembered the geometric colors!");
+        audioEngine.speak("رائع ومذهل! لقد تذكرت ألوان الأشكال الهندسية بنجاح!", "ar", null,
+          () => audioEngine.speak("Amazing! You successfully remembered the geometric colors!", "en")
+        );
+        window.dispatchEvent(new CustomEvent('colors-victory'));
+      } else {
+        audioEngine.playIncorrect();
+        this.updateAssistantText("تلوين الأشكال خاطئ! اضغط ابدأ التحدي لتثبيت النمط وتجربته مجدداً.", "Wrong shapes matching! Click Start challenge to retry.");
+        audioEngine.speak("تلوين الأشكال خاطئ! اضغط ابدأ التحدي وتجربته مجدداً.", "ar");
+      }
+    }
   }
 
   shakeElement(el) {
@@ -201,62 +286,10 @@ export class ColorsComponent {
   }
 
   syncUIWithState() {
-    // Sync active color pot
     const activeColor = gameState.colorsSelectedColor;
     this.paletteWrapper.querySelectorAll('.color-pot').forEach(pot => {
       pot.classList.toggle('active', pot.dataset.hex === activeColor);
     });
-
-    // Sync strips
-    for (let i = 0; i < 6; i++) {
-      const color = gameState.coloredStrips[i];
-      const stripEl = this.stripsContainer.querySelector(`[data-index="${i}"]`);
-      if (stripEl) {
-        stripEl.style.backgroundColor = color || '';
-        const indicator = stripEl.querySelector('.strip-color-indicator');
-        if (indicator) {
-          indicator.style.backgroundColor = color || '#f1f3f5';
-        }
-      }
-    }
-
-    // Sync shapes
-    const squareEl = this.panel.querySelector('#color-shape-square');
-    const triangleEl = this.panel.querySelector('#color-shape-triangle');
-    const circleEl = this.panel.querySelector('#color-shape-circle');
-
-    if (squareEl && gameState.coloredShapes.square) {
-      squareEl.style.fill = gameState.coloredShapes.square;
-    }
-    if (triangleEl && gameState.coloredShapes.triangle) {
-      triangleEl.style.fill = gameState.coloredShapes.triangle;
-    }
-    if (circleEl && gameState.coloredShapes.circle) {
-      circleEl.style.fill = gameState.coloredShapes.circle;
-    }
-  }
-
-  checkCompletion() {
-    const report = gameState.validateColorsSheet();
-    if (report.isComplete) {
-      logger.success('ColorsWorksheet', 'Colors worksheet validation passed!');
-      const event = new CustomEvent('colors-victory');
-      window.dispatchEvent(event);
-    } else {
-      // Partial completion verbal feedback
-      const totalStripsFilled = Object.keys(gameState.coloredStrips).length;
-      const totalShapesFilled = Object.values(gameState.coloredShapes).filter(c => c !== null).length;
-
-      if (totalStripsFilled === 6 && totalShapesFilled === 3) {
-        // All slots filled but validation failed
-        logger.warn('ColorsWorksheet', 'All slots colored, but coloring errors detected.');
-        audioEngine.playIncorrect();
-        const arMsg = "بعض الألوان ليست في مكانها الصحيح، تحقق من اللوحة!";
-        const enMsg = "Some colors are incorrect. Double-check your interactive board!";
-        this.updateAssistantText(arMsg, enMsg);
-        audioEngine.speak(arMsg, 'ar', null, () => audioEngine.speak(enMsg, 'en'));
-      }
-    }
   }
 
   updateAssistantText(arText, enText) {

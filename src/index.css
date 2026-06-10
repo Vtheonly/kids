@@ -301,6 +301,12 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transition: filter 0.4s ease;
+}
+
+.unikey-board.blurred-memory {
+  filter: blur(14px) grayscale(40%);
+  pointer-events: none;
 }
 
 /* Screws mimicking physical corners */
@@ -522,7 +528,7 @@ body {
 }
 
 /* ==========================================
-   WORKSHEET 2 & 3 STYLE PATTERNS
+   WORKSHEET STYLE PATTERNS
    ========================================== */
 .painting-studio-card {
   width: 100%;
@@ -688,7 +694,7 @@ body {
   font-size: 1.5rem;
 }
 
-/* Colors Worksheet Strips Section */
+/* Natural Anchors Strips Section */
 .strips-coloring-section {
   display: flex;
   gap: 15px;
@@ -698,29 +704,43 @@ body {
   direction: rtl;
 }
 
-.strip-item {
+.nature-anchor-card {
   flex: 1;
   max-width: 120px;
-  height: 180px;
+  height: 200px;
   background-color: #ffffff;
   border: 3px dashed #ced4da;
   border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
   padding: 15px 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.02);
 }
 
-.strip-item:hover {
+.nature-anchor-card:hover {
   border-color: var(--primary-color);
-  transform: scale(1.02);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.06);
+}
+
+.nature-anchor-emoji {
+  font-size: 2.8rem;
+  animation: float 3s infinite ease-in-out;
+}
+
+.nature-anchor-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #495057;
+  font-family: 'Tajawal', sans-serif;
 }
 
 .strip-number {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   font-weight: 900;
   color: #adb5bd;
 }
@@ -823,9 +843,86 @@ body {
   background-color: var(--primary-light);
 }
 
-/* ==========================================
-   DEVELOPER LOG SYSTEM (LOGGING PANEL)
-   ========================================== */
+/* Interactive recall and memory banners */
+.quiz-recall-panel {
+  width: 100%;
+  background: #fff8e1;
+  border: 3px solid #ffe082;
+  border-radius: 20px;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.quiz-question-badge {
+  background-color: var(--accent-color);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  display: inline-block;
+  margin-bottom: 5px;
+}
+
+.quiz-question-ar {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #3e2723;
+}
+
+.quiz-question-en {
+  font-size: 0.85rem;
+  color: #795548;
+  font-weight: 600;
+  direction: ltr;
+  text-align: left;
+}
+
+.memory-recall-controller-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 800;
+  padding: 12px 24px;
+  border-radius: 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(13,71,161,0.2);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.memory-recall-controller-btn:hover {
+  transform: scale(1.05);
+}
+
+.memory-recall-controller-btn.active {
+  background-color: #e53935;
+  box-shadow: 0 4px 10px rgba(229,57,53,0.2);
+}
+
+/* Dynamic Sequencer controller button */
+.shapes-action-btn {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 800;
+  padding: 10px 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.shapes-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(255,152,0,0.35);
+}
+
+/* Developer log trace system panel styling */
 .dev-log-panel {
   width: 100%;
   max-width: 950px;
@@ -930,6 +1027,11 @@ body {
   50% { transform: translateY(-8px); }
 }
 
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-6px) rotate(3deg); }
+}
+
 @keyframes pulse-border {
   0% { opacity: 0.4; transform: scale(0.97); }
   50% { opacity: 1; transform: scale(1.03); }
@@ -941,7 +1043,6 @@ body {
   100% { transform: scaleY(1); }
 }
 
-/* Canvas for Confetti Success effect */
 #celebration-canvas {
   position: fixed;
   top: 0;
@@ -1036,8 +1137,9 @@ body {
   .assistant-en { font-size: 0.85rem; }
   .stencils-tray { min-height: 120px; padding: 12px; }
   .paint-svg-wrapper { width: 100px; height: 100px; }
-  .strip-item { height: 140px; padding: 10px 5px; }
-  .strip-number { font-size: 1.2rem; }
+  .nature-anchor-card { height: 155px; padding: 10px 5px; }
+  .nature-anchor-emoji { font-size: 1.8rem; }
+  .strip-number { font-size: 1rem; }
   .ref-svg { width: 60px; height: 60px; }
   .sequence-cell { width: 45px; height: 45px; font-size: 1.2rem; }
   .dev-log-body.expanded { height: 160px; }
@@ -1058,4 +1160,3 @@ body {
 .shake {
   animation: shake 0.4s ease-in-out;
 }
-
